@@ -48,6 +48,22 @@ USER_AGENT = "omarchy-mailflow-plugin"
 addresses = {}
 
 
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects: urllib copies every request header, including the
+    session Cookie, to the redirect target, whatever its host or scheme. The
+    MailFlow API never redirects, so a 3xx here is treated as an HTTP error."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def build_opener(*handlers):
+    return urllib.request.build_opener(NoRedirect, *handlers)
+
+
+opener = build_opener()
+
+
 def emit(reading):
     print(json.dumps(reading), flush=True)
 
@@ -95,7 +111,7 @@ def get_json(url, cookie):
         url,
         headers={"Cookie": cookie, "Accept": "application/json", "User-Agent": USER_AGENT},
     )
-    with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+    with opener.open(request, timeout=TIMEOUT) as response:
         return json.load(response)
 
 
@@ -190,7 +206,7 @@ def login():
     password = getpass.getpass("Password: ")
 
     jar = http.cookiejar.CookieJar()
-    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+    login_opener = build_opener(urllib.request.HTTPCookieProcessor(jar))
 
     def post(path, body):
         request = urllib.request.Request(
@@ -205,7 +221,7 @@ def login():
             },
         )
         try:
-            with opener.open(request, timeout=TIMEOUT) as response:
+            with login_opener.open(request, timeout=TIMEOUT) as response:
                 return response.status, json.load(response)
         except urllib.error.HTTPError as error:
             try:
@@ -275,7 +291,7 @@ def logout():
             },
         )
         try:
-            with urllib.request.urlopen(request, timeout=TIMEOUT):
+            with opener.open(request, timeout=TIMEOUT):
                 pass
         except urllib.error.HTTPError:
             pass
