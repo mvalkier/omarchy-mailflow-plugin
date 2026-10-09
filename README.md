@@ -68,6 +68,17 @@ Update later with:
 omarchy plugin update melkweg.mailflow
 ```
 
+### Removal
+
+Sign out first, so the session ends on the server too, then remove the plugin and the
+session directory:
+
+```bash
+~/.config/omarchy/plugins/melkweg.mailflow/scripts/mf-unread logout
+omarchy plugin remove melkweg.mailflow
+rm -rf ~/.config/mailflow-bar
+```
+
 ## 🔑 Signing in
 
 Right after installation the envelope is red: the plugin is not signed in yet.
