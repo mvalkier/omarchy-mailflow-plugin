@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "melkweg.mailflow",
+  "name": "MailFlow",
+  "version": "0.2.0",
+  "author": "Martijn",
+  "license": "MIT",
+  "homepage": "https://github.com/mvalkier/omarchy-mailflow-plugin",
+  "description": "Unread mail from your self-hosted MailFlow in the bar.",
+  "kinds": ["bar-widget"],
+  "entryPoints": { "barWidget": "BarWidget.qml" },
+  "barWidget": {
+    "displayName": "MailFlow",
+    "description": "Envelope with the number of unread inbox messages; click for a per-account breakdown.",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
