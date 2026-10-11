@@ -16,7 +16,7 @@ An envelope with a count, and a click away from a per-account breakdown.
 
 ## ✨ Features
 
-- 📬 **Unread at a glance**: a filled envelope with the number of unread inbox messages
+- 📬 **Unread at a glance**: a filled envelope with the number of unread messages, including mail your inbox rules sorted into folders
 - 👥 **Per account**: click the envelope for the total and the count of every account
 - 🔴 **Honest about faults**: the envelope turns red when you are not signed in, MailFlow is unreachable, or the counts are out of date
 - 🔐 **Your own session**: signs in like the web app (password plus authenticator or email code); no extra server component, no database access
@@ -41,9 +41,21 @@ The tooltip gives the same information in one line per account.
 
 ### What the number means
 
-The number is what MailFlow itself shows: unread messages in the INBOX of each account,
-as reported by the IMAP server (so after any server-side filtering rules). The total is
-the sum over the accounts in MailFlow's unified inbox; the panel lists every account.
+The number is unread mail in the INBOX of each account, plus unread mail in every other
+folder, so messages that inbox rules move out of INBOX (into "Shop", "GitHub" and so on)
+still count. Sent, Drafts, Trash, Junk/Spam, Archive and Notes never count: folders with an
+IMAP special-use flag for those, or with one of those names. Unread stays unread wherever
+it is, so a folder you leave unread keeps the envelope lit.
+
+The panel shows the total per account. An account with unread mail outside INBOX says so
+below its address (`▸ 3 folders`); click it, or pick it with ↑/↓ and press Enter, to fold
+open a list of Inbox and those folders, most unread first. Nested folders show their path
+(`Clients › Acme`), cut off on the left when too long. Past eight rows the list scrolls
+inside the card, so many busy folders never stretch the panel. One account is open at a
+time, and all are closed again when the panel opens.
+
+The total in the bar covers the accounts in MailFlow's unified inbox; the panel lists
+every account. Counts are as reported by the IMAP server.
 
 An account whose count MailFlow could not refresh recently is marked out of date (red
 stripe, `(out of date)` in the tooltip).
@@ -172,7 +184,8 @@ A reading looks like this:
 
 ```json
 {"ok": true, "url": "https://mail.example.com", "total": 3, "complete": true,
- "accounts": [{"email": "me@example.com", "unread": 3, "stale": false}], "time": 1791561600}
+ "accounts": [{"email": "me@example.com", "unread": 3, "inbox": 1, "stale": false,
+               "folders": [{"name": "Shop", "unread": 2, "stale": false}]}], "time": 1791561600}
 {"ok": false, "url": "https://mail.example.com", "reason": "login"}
 ```
 

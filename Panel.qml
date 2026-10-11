@@ -55,6 +55,34 @@ Panel {
 
   function openWebmail() { if (root.hostWidget) root.hostWidget.openWebmail() }
 
+  // Accounts with unread mail outside INBOX fold open to a per-folder list; one at a
+  // time, all closed again whenever the panel opens. Keys: Up/Down picks an account,
+  // Enter or Space folds it open or shut.
+  property string expanded: ""
+  property string cursor: ""
+  readonly property var expandable: {
+    var out = []
+    for (var i = 0; i < root.accounts.length; i++) {
+      if ((root.accounts[i].folders || []).length > 0) out.push(root.accounts[i].email)
+    }
+    return out
+  }
+
+  function toggleAccount(email) {
+    root.cursor = email
+    root.expanded = root.expanded === email ? "" : email
+  }
+
+  function moveCursor(dy) {
+    var list = root.expandable
+    if (list.length === 0) return
+    var i = list.indexOf(root.cursor)
+    i = i < 0 ? (dy > 0 ? 0 : list.length - 1) : Math.max(0, Math.min(list.length - 1, i + dy))
+    root.cursor = list[i]
+  }
+
+  onOpenedChanged: if (root.opened) { root.expanded = ""; root.cursor = "" }
+
   component SectionHeader: Text {
     Layout.fillWidth: true
     Layout.topMargin: Style.space(8)
@@ -123,6 +151,8 @@ Panel {
       anchors.fill: parent
       onCloseRequested: root.close()
       onTabRequested: function (direction) { root.switchPanel(direction) }
+      onMoveRequested: function (dx, dy) { if (dy !== 0) root.moveCursor(dy) }
+      onActivateRequested: { if (root.cursor !== "") root.toggleAccount(root.cursor) }
 
       // No anchors.margins: KeyboardPanel.padding already sets the inset.
       ColumnLayout {
@@ -203,7 +233,7 @@ Panel {
             spacing: Style.space(4)
 
             Text {
-              text: root.total === 0 ? "NO NEW MAIL" : "INBOX"
+              text: root.total === 0 ? "NO NEW MAIL" : "NEW MAIL"
               color: root.colors.muted
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption
@@ -229,41 +259,135 @@ Panel {
             id: row
             required property var modelData
             readonly property bool unread: modelData.unread > 0
+            readonly property var folders: modelData.folders || []
+            readonly property bool foldable: row.folders.length > 0
+            readonly property bool open: root.expanded === modelData.email
+            // Inbox first, then the folders (most unread first, from mf-unread).
+            readonly property var rows: [{ name: "Inbox", unread: modelData.inbox, stale: modelData.stale }].concat(row.folders)
+            readonly property real rowHeight: Style.font.bodySmall + Style.space(10)
+            readonly property int maxRows: 8
+
             stripe: modelData.stale ? root.colors.red : (row.unread ? root.accent : root.colors.grey)
-            implicitHeight: Math.max(address.implicitHeight, number.implicitHeight) + Style.space(18)
+            border.color: root.cursor === modelData.email ? root.accent : root.colors.border
+            implicitHeight: body.implicitHeight + Style.space(18)
 
-            Text {
-              id: icon
-              anchors { left: parent.left; verticalCenter: parent.verticalCenter }
-              width: Style.space(18)
-              text: root.accountGlyph(row.modelData.email)
-              color: root.colors.muted
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.body
-            }
+            Column {
+              id: body
+              anchors { left: parent.left; right: parent.right; top: parent.top; topMargin: Style.space(9) }
+              spacing: Style.space(6)
 
-            Text {
-              id: address
-              anchors {
-                left: icon.right; leftMargin: Style.space(6)
-                right: number.left; rightMargin: Style.space(8)
-                verticalCenter: parent.verticalCenter
+              Item {
+                width: parent.width
+                height: Math.max(labels.implicitHeight, number.implicitHeight)
+
+                Text {
+                  id: icon
+                  anchors { left: parent.left; verticalCenter: parent.verticalCenter }
+                  width: Style.space(18)
+                  text: root.accountGlyph(row.modelData.email)
+                  color: root.colors.muted
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.body
+                }
+
+                Column {
+                  id: labels
+                  anchors {
+                    left: icon.right; leftMargin: Style.space(6)
+                    right: number.left; rightMargin: Style.space(8)
+                    verticalCenter: parent.verticalCenter
+                  }
+                  spacing: Style.space(2)
+
+                  Text {
+                    width: parent.width
+                    text: row.modelData.email
+                    color: root.colors.text
+                    elide: Text.ElideRight
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.bodySmall
+                  }
+
+                  Text {
+                    width: parent.width
+                    visible: row.foldable
+                    text: (row.open ? "▾ " : "▸ ") + row.folders.length + (row.folders.length === 1 ? " folder" : " folders")
+                    color: header.containsMouse ? root.colors.text : root.colors.muted
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                  }
+                }
+
+                Text {
+                  id: number
+                  anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+                  text: row.modelData.unread === null ? "?" : String(row.modelData.unread)
+                  color: row.modelData.stale ? root.colors.red : (row.unread ? root.accent : root.colors.muted)
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.title
+                  font.bold: true
+                }
+
+                MouseArea {
+                  id: header
+                  anchors.fill: parent
+                  enabled: row.foldable
+                  hoverEnabled: true
+                  cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                  onClicked: root.toggleAccount(row.modelData.email)
+                }
               }
-              text: row.modelData.email
-              color: root.colors.text
-              elide: Text.ElideRight
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.bodySmall
-            }
 
-            Text {
-              id: number
-              anchors { right: parent.right; verticalCenter: parent.verticalCenter }
-              text: row.modelData.unread === null ? "?" : String(row.modelData.unread)
-              color: row.modelData.stale ? root.colors.red : (row.unread ? root.accent : root.colors.muted)
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.title
-              font.bold: true
+              Rectangle {
+                visible: row.open
+                width: parent.width
+                height: 1
+                color: root.colors.border
+              }
+
+              // Scrolls inside the card past maxRows, so an account with dozens of
+              // busy folders cannot stretch the panel.
+              ListView {
+                id: folderList
+                visible: row.open
+                width: parent.width
+                height: row.open ? Math.min(count, row.maxRows) * row.rowHeight : 0
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                model: row.open ? row.rows : []
+
+                delegate: Item {
+                  id: folderRow
+                  required property var modelData
+                  width: folderList.width
+                  height: row.rowHeight
+
+                  Text {
+                    anchors {
+                      left: parent.left; leftMargin: Style.space(24)
+                      right: folderCount.left; rightMargin: Style.space(8)
+                      verticalCenter: parent.verticalCenter
+                    }
+                    text: folderRow.modelData.name
+                    // Elide on the left: for nested folders the last level tells them apart.
+                    elide: Text.ElideLeft
+                    color: root.colors.muted
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.bodySmall
+                  }
+
+                  Text {
+                    id: folderCount
+                    anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+                    text: folderRow.modelData.unread === null ? "?" : String(folderRow.modelData.unread)
+                    color: folderRow.modelData.stale ? root.colors.red
+                      : (folderRow.modelData.unread > 0 ? root.accent : root.colors.muted)
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.bodySmall
+                    font.bold: true
+                  }
+                }
+              }
             }
           }
         }

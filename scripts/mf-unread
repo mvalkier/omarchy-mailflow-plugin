@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Unread mail counter for the MailFlow bar widget.
 
-Polls MailFlow's own API (GET /api/mail/unread-counts) with a MailFlow session
-and prints one JSON line per reading on stdout, so BarWidget.qml can follow
-along line by line:
+Polls MailFlow's own API with a MailFlow session: GET /api/mail/unread-counts for
+INBOX, plus GET /api/accounts/<id>/folders for unread mail that inbox rules sorted
+into other folders. Prints one JSON line per reading on stdout, so BarWidget.qml
+can follow along line by line:
 
     {"ok": true, "url": "...", "total": 3, "complete": true, "accounts": [...], "time": 1791...}
     {"ok": false, "url": "..." | null, "reason": "login" | "unreachable"}
@@ -44,8 +45,35 @@ STEP = 2
 TIMEOUT = 10
 USER_AGENT = "omarchy-mailflow-plugin"
 
-# accountId -> email address; filled from /api/accounts when an unknown id shows up.
-addresses = {}
+# Folders that never count, besides INBOX (counted separately): by IMAP special-use
+# flag, and by name for servers that leave them unflagged (e.g. a plain "Spam").
+SKIP_SPECIAL_USE = {"\\inbox", "\\sent", "\\trash", "\\junk", "\\drafts", "\\archive", "\\all", "\\flagged", "\\important"}
+SKIP_NAMES = {
+    "inbox", "spam", "junk", "trash", "deleted messages", "deleted items", "sent", "sent items",
+    "sent messages", "sent mail", "drafts", "archive", "notes", "outbox",
+}
+
+
+def counted_folders(folders):
+    """Unread mail outside INBOX: every selectable folder that is not one of the
+    special ones, so mail that inbox rules sort away still shows up. Most unread
+    first; `name` is the full path with " › " between levels, so two folders with
+    the same leaf name stay apart."""
+    out = []
+    for f in folders:
+        leaf = f.get("name") or f.get("path") or ""
+        path = str(f.get("path") or leaf)
+        if f.get("no_select") or str(f.get("special_use") or "").casefold() in SKIP_SPECIAL_USE:
+            continue
+        if leaf.casefold() in SKIP_NAMES or path.casefold() in SKIP_NAMES:
+            continue
+        unread = f.get("unread_count")
+        if not unread:
+            continue
+        delimiter = f.get("delimiter")
+        name = path.replace(delimiter, " › ") if delimiter else path
+        out.append({"name": name, "unread": int(unread), "stale": f.get("counts_stale") is True})
+    return sorted(out, key=lambda f: (-f["unread"], f["name"].casefold()))
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -125,26 +153,31 @@ def measure():
         data = get_json(f"{url}/api/mail/unread-counts", cookie)
         by_account = data.get("byAccount") or {}
         snapshots = data.get("snapshots") or {}
-        if any(account_id not in addresses for account_id in by_account):
-            accounts = get_json(f"{url}/api/accounts", cookie)
-            addresses.update({a["id"]: a["email_address"] for a in accounts})
+        info = {a["id"]: a for a in get_json(f"{url}/api/accounts", cookie)}
+        accounts = []
+        total = int(data["total"])
+        for account_id, count in by_account.items():
+            account = info.get(account_id) or {}
+            folders = counted_folders(get_json(f"{url}/api/accounts/{account_id}/folders", cookie))
+            extra = sum(f["unread"] for f in folders)
+            # The server's total covers the INBOX of accounts in the unified inbox.
+            if account.get("include_in_unified_inbox", True):
+                total += extra
+            inbox = None if count is None else int(count)
+            accounts.append({
+                "email": account.get("email_address", account_id),
+                "unread": None if inbox is None else inbox + extra,
+                "inbox": inbox,
+                "folders": folders,
+                "stale": (snapshots.get(account_id) or {}).get("stale", True) is True,
+            })
         result = {
             "ok": True,
             "url": url,
-            "total": int(data["total"]),
+            "total": total,
             # MailFlow before 3.4 has no `complete`: shown as out of date.
             "complete": data.get("complete") is True,
-            "accounts": sorted(
-                (
-                    {
-                        "email": addresses.get(account_id, account_id),
-                        "unread": None if count is None else int(count),
-                        "stale": (snapshots.get(account_id) or {}).get("stale", True) is True,
-                    }
-                    for account_id, count in by_account.items()
-                ),
-                key=lambda a: a["email"],
-            ),
+            "accounts": sorted(accounts, key=lambda a: a["email"]),
             "time": int(time.time()),
         }
     except urllib.error.HTTPError as error:

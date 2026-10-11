@@ -41,7 +41,11 @@ BarWidget {
     var accounts = root.reading.accounts || []
     for (var i = 0; i < accounts.length; i++) {
       var a = accounts[i]
-      lines.push(a.email + ": " + (a.unread === null ? "?" : a.unread) + (a.stale ? " (out of date)" : ""))
+      // Only the number of folders: a full list would make the tooltip unreadable.
+      var n = (a.folders || []).length
+      lines.push(a.email + ": " + (a.unread === null ? "?" : a.unread)
+        + (n > 0 ? " (" + n + (n === 1 ? " folder)" : " folders)") : "")
+        + (a.stale ? " (out of date)" : ""))
     }
     var head = root.total === 0 ? "No unread mail" : root.total + " unread"
     return head + "\n" + lines.join("\n")
