@@ -7,6 +7,7 @@ An envelope with a count, and a click away from a per-account breakdown.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Omarchy](https://img.shields.io/badge/Omarchy-plugin-8a2be2.svg)](https://omarchy.org)
+[![Omarchy plugin marketplace](https://img.shields.io/badge/marketplace-verified-2ea44f.svg)](https://omarchyplugins.com/plugin.html?id=melkweg.mailflow)
 [![MailFlow.sh](https://img.shields.io/badge/MailFlow.sh-3.4%2B-0a7cff.svg)](https://mailflow.sh)
 [![Python](https://img.shields.io/badge/python-3-3776ab.svg?logo=python&logoColor=white)](scripts/mf-unread)
 
@@ -69,6 +70,9 @@ stripe, `(out of date)` in the tooltip).
 - `python3` (standard library only).
 
 ## 📦 Installation
+
+Listed in the [Omarchy plugin marketplace](https://omarchyplugins.com/plugin.html?id=melkweg.mailflow),
+where you can also copy the install command. From a terminal:
 
 ```bash
 omarchy plugin add https://github.com/mvalkier/omarchy-mailflow-plugin.git --enable
